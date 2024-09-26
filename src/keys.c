@@ -413,7 +413,7 @@ int parse_key_sequence(const char *s, uint8_t *codep, uint8_t *modsp)
 }
 
 
-int key_match2(enum unicode_state state, uint8_t code) {
+int key_match(enum unicode_state state, uint8_t code) {
 	switch(state) {
 		case UNICODE_DISABLED:
 			return 0;
@@ -444,42 +444,6 @@ int key_match2(enum unicode_state state, uint8_t code) {
 		}
 		default:
 			fprintf(stderr, "unreachable: unknown unicode state %d\n", state);
-			exit(-1);
-	}
-}
-
-int key_match(struct key key, uint8_t code) {
-	switch(key.kind) {
-		case KEY_MATCHED:
-			return 0;
-		case KEY_LITERAL: return key.literal == code;
-		case KEY_UNICODE_HEX: switch(code) {
-			case KEYD_A:
-			case KEYD_B:
-			case KEYD_C:
-			case KEYD_D:
-			case KEYD_E:
-			case KEYD_F:
-				return 1;
-		}
-    __attribute__ ((fallthrough));
-		case KEY_KEYPAD: switch(code) {
-			case KEYD_KP0:
-			case KEYD_KP1:
-			case KEYD_KP2:
-			case KEYD_KP3:
-			case KEYD_KP4:
-			case KEYD_KP5:
-			case KEYD_KP6:
-			case KEYD_KP7:
-			case KEYD_KP8:
-			case KEYD_KP9:
-				return 1;
-			default:
-				return 0;
-		}
-		default:
-			fprintf(stderr, "unreachable: unknown key kind %d\n", key.kind);
 			exit(-1);
 	}
 }
