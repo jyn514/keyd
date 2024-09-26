@@ -215,7 +215,7 @@ static struct descriptor *layer_lookup_chord(struct layer *layer, uint8_t *keys,
 		for (j = 0; j < n; j++) {
 			size_t k;
 			for (k = 0; k < chord->sz; k++)
-				if (keys[j] == chord->keys[k].literal) {
+				if (keys[j] == chord->keys[k]) {
 					nm++;
 					break;
 				}
@@ -272,14 +272,8 @@ static int set_layer_entry(const struct config *config,
 				return -1;
 			}
 
-			// TODO: needs to handle unicode chords
-
 			chord = &layer->chords[layer->nr_chords];
-			// TODO: maybe allow configuring subsets and not just literals?
-			for (i = 0; i < sizeof keys; i++) {
-				chord->keys[i].kind = KEY_LITERAL;
-				chord->keys[i].literal = keys[i];
-			}
+			memcpy(chord->keys, keys, sizeof keys);
 			chord->sz = n;
 			chord->d = *d;
 
@@ -740,8 +734,6 @@ static void parse_global_section(struct config *config, struct ini_section *sect
 			config->macro_sequence_timeout = atoi(ent->val);
 		else if (!strcmp(ent->key, "disable_modifier_guard"))
 			config->disable_modifier_guard = atoi(ent->val);
-		else if (!strcmp(ent->key, "alt_unicode"))
-			config->alt_unicode = atoi(ent->val);
 		else if (!strcmp(ent->key, "oneshot_timeout"))
 			config->oneshot_timeout = atoi(ent->val);
 		else if (!strcmp(ent->key, "chord_hold_timeout"))

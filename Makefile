@@ -36,8 +36,7 @@ all:
 	cp scripts/keyd-application-mapper bin/
 	$(CC) $(CFLAGS) -O3 $(COMPAT_FILES) src/*.c src/vkbd/$(VKBD).c -lpthread -o bin/keyd $(LDFLAGS)
 debug:
-	CFLAGS="-g -Wunused" $(MAKE)
-	# CFLAGS="-g -fsanitize=address -Wunused" $(MAKE)
+	CFLAGS="-g -fsanitize=address -Wunused" $(MAKE)
 compose:
 	-mkdir data
 	./scripts/generate_xcompose

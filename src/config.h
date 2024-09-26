@@ -73,7 +73,7 @@ struct descriptor {
 };
 
 struct chord {
-	struct key keys[8];
+	uint8_t keys[8];
 	size_t sz;
 
 	struct descriptor d;
@@ -148,7 +148,6 @@ struct config {
 
 	uint8_t layer_indicator;
 	uint8_t disable_modifier_guard;
-	uint8_t alt_unicode;
 	char default_layout[MAX_LAYER_NAME_LEN];
 };
 

@@ -313,7 +313,7 @@ static int chord_event_match(struct chord *chord, struct key_event *events, size
 
 			npressed++;
 			for (j = 0; j < chord->sz; j++)
-				if (key_match(chord->keys[j], events[i].code))
+				if (chord->keys[j] == events[i].code)
 					found = 1;
 
 			if (!found)
@@ -348,7 +348,6 @@ static void enqueue_chord_event(struct keyboard *kbd, uint8_t code, uint8_t pres
  *  2 in the case of an unambiguous match (populating chord and layer)
  *  3 in the case of an ambiguous match (populating chord and layer)
  */
- // this is what sets `kbd->chord.match`
 static int check_chord_match(struct keyboard *kbd, const struct chord **chord, int *chord_layer)
 {
 	size_t idx;
@@ -946,7 +945,6 @@ struct keyboard *new_keyboard(struct config *config, const struct output *output
 	return kbd;
 }
 
-// call this with the unicode chord
 static int resolve_chord(struct keyboard *kbd)
 {
 	size_t queue_offset = 0;
@@ -986,7 +984,6 @@ static int resolve_chord(struct keyboard *kbd)
 
 static int abort_chord(struct keyboard *kbd)
 {
-	// dbg("abort chord");
 	kbd->chord.match = NULL;
 	return resolve_chord(kbd);
 }
@@ -999,7 +996,6 @@ static int handle_chord(struct keyboard *kbd,
 	const long hold_timeout = kbd->config.chord_hold_timeout;
 
 	if (code && !pressed) {
-		// look here
 		for (i = 0; i < ARRAY_SIZE(kbd->active_chords); i++) {
 			struct active_chord *ac = &kbd->active_chords[i];
 			uint8_t chord_code = KEYD_CHORD_1 + i;
@@ -1010,13 +1006,12 @@ static int handle_chord(struct keyboard *kbd,
 				int found = 0;
 
 				for (i = 0; i < ac->chord.sz; i++) {
-					if (key_match(ac->chord.keys[i], code)) {
-						ac->chord.keys[i].kind = KEY_MATCHED;
-						ac->chord.keys[i].literal = code;
+					if (ac->chord.keys[i] == code) {
+						ac->chord.keys[i] = 0;
 						found = 1;
 					}
 
-					if (ac->chord.keys[i].kind != KEY_MATCHED)
+					if (ac->chord.keys[i])
 						nremaining++;
 				}
 
@@ -1124,7 +1119,7 @@ static int handle_chord(struct keyboard *kbd,
 			size_t i;
 
 			for (i = 0; i < kbd->chord.match->sz; i++)
-				if (key_match(kbd->chord.match->keys[i], code))
+				if (kbd->chord.match->keys[i] == code)
 					return abort_chord(kbd);
 		}
 
