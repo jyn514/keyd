@@ -7,7 +7,9 @@
 #define CONFIG_H
 
 #include <limits.h>
+#include <stdint.h>
 #include "macro.h"
+#include "keys.h"
 
 #define MAX_LAYER_NAME_LEN	64
 #define MAX_DESCRIPTOR_ARGS	3
@@ -47,6 +49,7 @@ enum op {
 	OP_MACRO2,
 	OP_COMMAND,
 	OP_TIMEOUT,
+	OP_UNICODE,
 
 /* Experimental */
 	OP_SCROLL_TOGGLE,
@@ -70,7 +73,7 @@ struct descriptor {
 };
 
 struct chord {
-	uint8_t keys[8];
+	struct key keys[8];
 	size_t sz;
 
 	struct descriptor d;
@@ -145,6 +148,7 @@ struct config {
 
 	uint8_t layer_indicator;
 	uint8_t disable_modifier_guard;
+	uint8_t alt_unicode;
 	char default_layout[MAX_LAYER_NAME_LEN];
 };
 

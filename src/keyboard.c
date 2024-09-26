@@ -4,9 +4,13 @@
  * © 2019 Raheman Vaiya (see also: LICENSE).
  */
 
+#include "config.h"
+#include "keyboard.h"
 #include "keyd.h"
+#include "keys.h"
 
 static long process_event(struct keyboard *kbd, uint8_t code, int pressed, long time);
+static int resolve_chord(struct keyboard *kbd);
 
 /*
  * Here be tiny dragons.
@@ -173,6 +177,19 @@ static void execute_macro(struct keyboard *kbd, int dl, const struct macro *macr
 	}
 }
 
+int insert_unicode(struct keyboard *kbd, int dl, uint32_t codepoint) {
+	struct macro macro_def, *macro = &macro_def;
+	int xcode;
+
+	if ((xcode = unicode_lookup_index(codepoint)) > 0) {
+		macro_def.sz = 0;
+		MACRO_ADD_ENTRY(MACRO_UNICODE, xcode);
+		execute_macro(kbd, dl, macro);
+		return 0;
+	}
+	return -1;
+}
+
 static void lookup_descriptor(struct keyboard *kbd, uint8_t code,
 			      struct descriptor *d, int *dl)
 {
@@ -283,13 +300,15 @@ static int chord_event_match(struct chord *chord, struct key_event *events, size
 	if (!nevents)
 		return 0;
 
+	dbg("checking match for chord size %d; events=%d", chord->sz, nevents);
+
 	for (i = 0; i < nevents; i++)
 		if (events[i].pressed) {
 			int found = 0;
 
 			npressed++;
 			for (j = 0; j < chord->sz; j++)
-				if (chord->keys[j] == events[i].code)
+				if (key_match(chord->keys[j], events[i].code))
 					found = 1;
 
 			if (!found)
@@ -298,6 +317,7 @@ static int chord_event_match(struct chord *chord, struct key_event *events, size
 				n++;
 		}
 
+	dbg("found match!");
 	if (npressed == 0)
 		return 0;
 	else
@@ -316,6 +336,7 @@ static void enqueue_chord_event(struct keyboard *kbd, uint8_t code, uint8_t pres
 	kbd->chord.queue[kbd->chord.queue_sz].timestamp = time;
 
 	kbd->chord.queue_sz++;
+	dbg("enqueue event %d; size=%d", code, kbd->chord.queue_sz);
 }
 
 /* Returns:
@@ -324,6 +345,7 @@ static void enqueue_chord_event(struct keyboard *kbd, uint8_t code, uint8_t pres
  *  2 in the case of an unambiguous match (populating chord and layer)
  *  3 in the case of an ambiguous match (populating chord and layer)
  */
+ // this is what sets `kbd->chord.match`
 static int check_chord_match(struct keyboard *kbd, const struct chord **chord, int *chord_layer)
 {
 	size_t idx;
@@ -727,6 +749,71 @@ static long process_descriptor(struct keyboard *kbd, uint8_t code,
 		}
 
 		break;
+	case OP_UNICODE: ;
+		struct layer *layer = &kbd->config.layers[dl];
+
+		dbg("op unicode %s (layer %s)", pressed ? "down" : "up", layer->name);
+
+		if (pressed) {
+			// Mark the chord as active.
+			// Dynamically add a new chord to the current layer.
+			struct chord *chord = &layer->chords[layer->nr_chords];
+			// The max unicode code point is 0x10FFFF
+			for (i = 0; i < 6; i++) {
+				chord->keys[i].kind = KEY_UNICODE_HEX;
+				chord->keys[i].literal = 0;
+			}
+			chord->sz = 6;
+			struct descriptor d;
+			d.op = OP_KEYSEQUENCE;
+			d.args[0].code = KEYD_NOOP;
+			chord->d = d; // TODO: check what this does when hitting 6 keys
+
+			layer->nr_chords++;
+	 	} else {
+	 		// Resolve the sequence. (TODO: i think this just happens automatically because of normal chord handling? oh wait no we have to read the keys right)
+
+	 		// Remove the chord.
+			layer->nr_chords--;
+
+			// Find which of the active chords is the right one.
+			uint8_t keys[6];
+			size_t key;
+			for (int i = 0; i < ARRAY_SIZE(kbd->active_chords); i++) {
+				struct active_chord *ac = &kbd->active_chords[i];
+				dbg("considering active chord %d: active=%d; op=%d", i, ac->active, ac->chord.d.op);
+				if (ac->active && ac->chord.d.op == OP_KEYSEQUENCE && ac->chord.d.args[0].code == KEYD_NOOP)   {
+					for (key = 0; key < ac->chord.sz; key++) {
+						switch (ac->chord.keys[key].kind) {
+							case KEY_MATCHED:
+								keys[key] = ac->chord.keys[key].literal;
+								continue;
+							case KEY_UNICODE_HEX:  // no more keys typed
+								goto found;
+							default:
+								goto not_this_chord;
+						}
+					}
+				}
+				not_this_chord: {}
+ 			}
+
+			break; // no key found; noop
+			
+			found: {}
+			// Input the unicode character.
+			uint32_t codepoint = parse_unicode_hex(keys, key);
+			insert_unicode(kbd, dl, codepoint);
+	 	}
+		// need to set layer->chords to our custom unicode chord
+		
+			// chord = &layer->chords[layer->nr_chords];
+			// memcpy(chord->keys, keys, sizeof keys);
+			// chord->sz = n;
+			// chord->d = *d;
+
+			// layer->nr_chords++;
+		break;
 	case OP_COMMAND:
 		if (pressed) {
 			execute_command(kbd->config.commands[d->args[0].idx].cmd);
@@ -842,6 +929,7 @@ struct keyboard *new_keyboard(struct config *config, const struct output *output
 	return kbd;
 }
 
+// call this with the unicode chord
 static int resolve_chord(struct keyboard *kbd)
 {
 	size_t queue_offset = 0;
@@ -881,6 +969,7 @@ static int resolve_chord(struct keyboard *kbd)
 
 static int abort_chord(struct keyboard *kbd)
 {
+	// dbg("abort chord");
 	kbd->chord.match = NULL;
 	return resolve_chord(kbd);
 }
@@ -893,6 +982,7 @@ static int handle_chord(struct keyboard *kbd,
 	const long hold_timeout = kbd->config.chord_hold_timeout;
 
 	if (code && !pressed) {
+		// look here
 		for (i = 0; i < ARRAY_SIZE(kbd->active_chords); i++) {
 			struct active_chord *ac = &kbd->active_chords[i];
 			uint8_t chord_code = KEYD_CHORD_1 + i;
@@ -903,12 +993,13 @@ static int handle_chord(struct keyboard *kbd,
 				int found = 0;
 
 				for (i = 0; i < ac->chord.sz; i++) {
-					if (ac->chord.keys[i] == code) {
-						ac->chord.keys[i] = 0;
+					if (key_match(ac->chord.keys[i], code)) {
+						ac->chord.keys[i].kind = KEY_MATCHED;
+						ac->chord.keys[i].literal = code;
 						found = 1;
 					}
 
-					if (ac->chord.keys[i])
+					if (ac->chord.keys[i].kind != KEY_MATCHED)
 						nremaining++;
 				}
 
@@ -931,6 +1022,7 @@ static int handle_chord(struct keyboard *kbd,
 		kbd->chord.queue_sz = 0;
 		kbd->chord.match = NULL;
 		kbd->chord.start_code = code;
+		dbg("clear queue; replace with %d", code);
 
 		enqueue_chord_event(kbd, code, pressed, time);
 		switch (check_chord_match(kbd, &kbd->chord.match, &kbd->chord.match_layer)) {
@@ -1016,7 +1108,7 @@ static int handle_chord(struct keyboard *kbd,
 			size_t i;
 
 			for (i = 0; i < kbd->chord.match->sz; i++)
-				if (kbd->chord.match->keys[i] == code)
+				if (key_match(kbd->chord.match->keys[i], code))
 					return abort_chord(kbd);
 		}
 

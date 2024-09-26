@@ -1,4 +1,6 @@
 #include "keyd.h"
+#include "unicode.h"
+#include <stdint.h>
 
 /*
  * Parses expressions of the form: C-t hello enter.
@@ -9,23 +11,13 @@ int macro_parse(char *s, struct macro *macro)
 {
 	char *tok;
 
-	#define ADD_ENTRY(t, d) do { \
-		if (macro->sz >= ARRAY_SIZE(macro->entries)) { \
-			err("maximum macro size (%d) exceeded", ARRAY_SIZE(macro->entries)); \
-			return -1; \
-		} \
-		macro->entries[macro->sz].type = t; \
-		macro->entries[macro->sz].data = d; \
-		macro->sz++; \
-	} while(0)
-
 	macro->sz = 0;
 	for (tok = strtok(s, " "); tok; tok = strtok(NULL, " ")) {
 		uint8_t code, mods;
 		size_t len = strlen(tok);
 
 		if (!parse_key_sequence(tok, &code, &mods)) {
-			ADD_ENTRY(MACRO_KEYSEQUENCE, (mods << 8) | code);
+			MACRO_ADD_ENTRY(MACRO_KEYSEQUENCE, (mods << 8) | code);
 		} else if (strchr(tok, '+')) {
 			char *saveptr;
 			char *key;
@@ -34,18 +26,18 @@ int macro_parse(char *s, struct macro *macro)
 				size_t len = strlen(key);
 
 				if (is_timeval(key))
-					ADD_ENTRY(MACRO_TIMEOUT, atoi(key));
+					MACRO_ADD_ENTRY(MACRO_TIMEOUT, atoi(key));
 				else if (!parse_key_sequence(key, &code, &mods))
-					ADD_ENTRY(MACRO_HOLD, code);
+					MACRO_ADD_ENTRY(MACRO_HOLD, code);
 				else {
 					err("%s is not a valid key", key);
 					return -1;
 				}
 			}
 
-			ADD_ENTRY(MACRO_RELEASE, 0);
+			MACRO_ADD_ENTRY(MACRO_RELEASE, 0);
 		} else if (is_timeval(tok)) {
-			ADD_ENTRY(MACRO_TIMEOUT, atoi(tok));
+			MACRO_ADD_ENTRY(MACRO_TIMEOUT, atoi(tok));
 		} else {
 			uint32_t codepoint;
 			int chrsz;
@@ -60,17 +52,17 @@ int macro_parse(char *s, struct macro *macro)
 						const char *shiftname = keycode_table[i].shifted_name;
 
 						if (name && name[0] == tok[0] && name[1] == 0) {
-							ADD_ENTRY(MACRO_KEYSEQUENCE, i);
+							MACRO_ADD_ENTRY(MACRO_KEYSEQUENCE, i);
 							break;
 						}
 
 						if (shiftname && shiftname[0] == tok[0] && shiftname[1] == 0) {
-							ADD_ENTRY(MACRO_KEYSEQUENCE, (MOD_SHIFT << 8) | i);
+							MACRO_ADD_ENTRY(MACRO_KEYSEQUENCE, (MOD_SHIFT << 8) | i);
 							break;
 						}
 					}
 				} else if ((xcode = unicode_lookup_index(codepoint)) > 0)
-					ADD_ENTRY(MACRO_UNICODE, xcode);
+					MACRO_ADD_ENTRY(MACRO_UNICODE, xcode);
 
 				tok += chrsz;
 			}
@@ -78,8 +70,6 @@ int macro_parse(char *s, struct macro *macro)
 	}
 
 	return 0;
-
-	#undef ADD_ENTRY
 }
 
 void macro_execute(void (*output)(uint8_t, uint8_t),

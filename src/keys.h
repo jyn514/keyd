@@ -290,8 +290,23 @@ struct modifier {
 
 #define KEY_NAME(code) (keycode_table[code].name ? keycode_table[code].name : "UNKNOWN")
 
+struct key {
+	enum kind {
+		KEY_LITERAL,
+		/* Use subset matching instead of exact comparison */
+		KEY_KEYPAD,
+		KEY_UNICODE_HEX,
+		/* This key has already been typed and never matches any input */
+		KEY_MATCHED,
+	} kind;
+	uint8_t literal;
+};
+
 int parse_modset(const char *s, uint8_t *mods);
 int parse_key_sequence(const char *s, uint8_t *code, uint8_t *mods);
+uint32_t parse_unicode_hex(uint8_t *keys, size_t n);
+uint32_t parse_unicode_decimal(uint8_t *keys, size_t n);
+int key_match(struct key key, uint8_t code);
 
 extern const struct modifier modifiers[MAX_MOD];
 extern const struct keycode_table_ent keycode_table[256];

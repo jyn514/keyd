@@ -32,4 +32,15 @@ void macro_execute(void (*output)(uint8_t, uint8_t),
 		   size_t timeout);
 
 int macro_parse(char *s, struct macro *macro);
+
+#define MACRO_ADD_ENTRY(t, d) do { \
+	if (macro->sz >= ARRAY_SIZE(macro->entries)) { \
+		err("maximum macro size (%d) exceeded", ARRAY_SIZE(macro->entries)); \
+		return -1; \
+	} \
+	macro->entries[macro->sz].type = t; \
+	macro->entries[macro->sz].data = d; \
+	macro->sz++; \
+} while(0)
+
 #endif

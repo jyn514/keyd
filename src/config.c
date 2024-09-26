@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <libgen.h>
 
+#include "config.h"
 #include "keyd.h"
 #include "ini.h"
 #include "keys.h"
@@ -67,6 +68,8 @@ static struct {
 
 	{ "macro2", 	NULL,	OP_MACRO2,	{ ARG_TIMEOUT, ARG_TIMEOUT, ARG_MACRO } },
 	{ "setlayout", 	NULL,	OP_LAYOUT,	{ ARG_LAYOUT } },
+
+	{ "unicode", NULL, OP_UNICODE, {} },
 
 	/* Experimental */
 	{ "scrollt", 	NULL,	OP_SCROLL_TOGGLE,		{ARG_SENSITIVITY} },
@@ -212,7 +215,7 @@ static struct descriptor *layer_lookup_chord(struct layer *layer, uint8_t *keys,
 		for (j = 0; j < n; j++) {
 			size_t k;
 			for (k = 0; k < chord->sz; k++)
-				if (keys[j] == chord->keys[k]) {
+				if (keys[j] == chord->keys[k].literal) {
 					nm++;
 					break;
 				}
@@ -269,8 +272,14 @@ static int set_layer_entry(const struct config *config,
 				return -1;
 			}
 
+			// TODO: needs to handle unicode chords
+
 			chord = &layer->chords[layer->nr_chords];
-			memcpy(chord->keys, keys, sizeof keys);
+			// TODO: maybe allow configuring subsets and not just literals?
+			for (i = 0; i < sizeof keys; i++) {
+				chord->keys[i].kind = KEY_LITERAL;
+				chord->keys[i].literal = keys[i];
+			}
 			chord->sz = n;
 			chord->d = *d;
 
@@ -482,17 +491,6 @@ exit:
 int parse_macro_expression(const char *s, struct macro *macro)
 {
 	uint8_t code, mods;
-
-	#define ADD_ENTRY(t, d) do { \
-		if (macro->sz >= ARRAY_SIZE(macro->entries)) { \
-			err("maximum macro size (%d) exceeded", ARRAY_SIZE(macro->entries)); \
-			return 1; \
-		} \
-		macro->entries[macro->sz].type = t; \
-		macro->entries[macro->sz].data = d; \
-		macro->sz++; \
-	} while(0)
-
 	size_t len = strlen(s);
 
 	char buf[1024];
@@ -742,6 +740,8 @@ static void parse_global_section(struct config *config, struct ini_section *sect
 			config->macro_sequence_timeout = atoi(ent->val);
 		else if (!strcmp(ent->key, "disable_modifier_guard"))
 			config->disable_modifier_guard = atoi(ent->val);
+		else if (!strcmp(ent->key, "alt_unicode"))
+			config->alt_unicode = atoi(ent->val);
 		else if (!strcmp(ent->key, "oneshot_timeout"))
 			config->oneshot_timeout = atoi(ent->val);
 		else if (!strcmp(ent->key, "chord_hold_timeout"))
@@ -1030,4 +1030,3 @@ int config_add_entry(struct config *config, const char *exp)
 
 	return set_layer_entry(config, layer, keyname, &d);
 }
-

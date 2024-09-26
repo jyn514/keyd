@@ -4,6 +4,7 @@
  * © 2019 Raheman Vaiya (see also: LICENSE).
  */
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include "keys.h"
 
@@ -411,3 +412,96 @@ int parse_key_sequence(const char *s, uint8_t *codep, uint8_t *modsp)
 	return -1;
 }
 
+
+int key_match(struct key key, uint8_t code) {
+	switch(key.kind) {
+		case KEY_MATCHED:
+			return 0;
+		case KEY_LITERAL: return key.literal == code;
+		case KEY_UNICODE_HEX: switch(code) {
+			case KEYD_A:
+			case KEYD_B:
+			case KEYD_C:
+			case KEYD_D:
+			case KEYD_E:
+			case KEYD_F:
+				return 1;
+		}
+    __attribute__ ((fallthrough));
+		case KEY_KEYPAD: switch(code) {
+			case KEYD_KP0:
+			case KEYD_KP1:
+			case KEYD_KP2:
+			case KEYD_KP3:
+			case KEYD_KP4:
+			case KEYD_KP5:
+			case KEYD_KP6:
+			case KEYD_KP7:
+			case KEYD_KP8:
+			case KEYD_KP9:
+				return 1;
+			default:
+				return 0;
+		}
+		default:
+			fprintf(stderr, "unreachable: unknown key kind %d\n", key.kind);
+			exit(-1);
+	}
+}
+
+uint8_t parse_digit(uint8_t digit) {
+	switch (digit) {
+			case KEYD_KP0:
+				return 0;
+			case KEYD_KP1:
+				return 1;
+			case KEYD_KP2:
+				return 2;
+			case KEYD_KP3:
+				return 3;
+			case KEYD_KP4:
+				return 4;
+			case KEYD_KP5:
+				return 5;
+			case KEYD_KP6:
+				return 6;
+			case KEYD_KP7:
+				return 7;
+			case KEYD_KP8:
+				return 8;
+			case KEYD_KP9:
+				return 9;
+			case KEYD_A:
+				return 10;
+			case KEYD_B:
+				return 11;
+			case KEYD_C:
+				return 12;
+			case KEYD_D:
+				return 13;
+			case KEYD_E:
+				return 14;
+			case KEYD_F:
+				return 15;
+			default:
+				return -1;
+		}
+}
+
+uint32_t parse_unicode(uint8_t *keys, size_t n, uint8_t radix) {
+	uint32_t codepoint = 0;
+
+	for (size_t i = 0; i < n; i++) {
+		codepoint = codepoint*radix + parse_digit(keys[i]);
+	}
+
+	return codepoint;
+}
+
+uint32_t parse_unicode_hex(uint8_t *keys, size_t n) {
+	return parse_unicode(keys, n, 16);
+}
+
+uint32_t parse_unicode_decimal(uint8_t *keys, size_t n) {
+	return parse_unicode(keys, n, 10);
+}

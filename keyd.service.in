@@ -4,6 +4,7 @@ Description=key remapping daemon
 [Service]
 Type=simple
 ExecStart=@PREFIX@/bin/keyd
+Environment="KEYD_DEBUG=1"
 
 [Install]
 WantedBy=multi-user.target
