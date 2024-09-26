@@ -49,6 +49,9 @@ struct keyboard {
 
 	uint8_t last_pressed_output_code;
 	uint8_t last_pressed_code;
+	uint8_t pending_unicode[7];
+	size_t unicode_len;
+	enum unicode_state unicode_state;
 
 	uint8_t oneshot_latch;
 

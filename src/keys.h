@@ -302,11 +302,14 @@ struct key {
 	uint8_t literal;
 };
 
+enum unicode_state { UNICODE_DISABLED, UNICODE_DECIMAL, UNICODE_HEX };
+
 int parse_modset(const char *s, uint8_t *mods);
 int parse_key_sequence(const char *s, uint8_t *code, uint8_t *mods);
 uint32_t parse_unicode_hex(uint8_t *keys, size_t n);
 uint32_t parse_unicode_decimal(uint8_t *keys, size_t n);
 int key_match(struct key key, uint8_t code);
+int key_match2(enum unicode_state state, uint8_t code);
 
 extern const struct modifier modifiers[MAX_MOD];
 extern const struct keycode_table_ent keycode_table[256];

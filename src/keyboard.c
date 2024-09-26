@@ -83,7 +83,14 @@ static void send_key(struct keyboard *kbd, uint8_t code, uint8_t pressed)
 
 	if (kbd->keystate[code] != pressed) {
 		kbd->keystate[code] = pressed;
-		kbd->output.send_key(code, pressed);
+		if (key_match2(kbd->unicode_state, code)) {
+			if (pressed && kbd->unicode_len < sizeof kbd->pending_unicode) {
+				dbg("enqueue unicode %s", KEY_NAME(code));
+				kbd->pending_unicode[kbd->unicode_len++] = code;
+			}			
+		} else {
+			kbd->output.send_key(code, pressed);
+		}
 	}
 }
 
@@ -300,8 +307,6 @@ static int chord_event_match(struct chord *chord, struct key_event *events, size
 	if (!nevents)
 		return 0;
 
-	dbg("checking match for chord size %d; events=%d", chord->sz, nevents);
-
 	for (i = 0; i < nevents; i++)
 		if (events[i].pressed) {
 			int found = 0;
@@ -317,7 +322,6 @@ static int chord_event_match(struct chord *chord, struct key_event *events, size
 				n++;
 		}
 
-	dbg("found match!");
 	if (npressed == 0)
 		return 0;
 	else
@@ -336,7 +340,6 @@ static void enqueue_chord_event(struct keyboard *kbd, uint8_t code, uint8_t pres
 	kbd->chord.queue[kbd->chord.queue_sz].timestamp = time;
 
 	kbd->chord.queue_sz++;
-	dbg("enqueue event %d; size=%d", code, kbd->chord.queue_sz);
 }
 
 /* Returns:
@@ -755,54 +758,68 @@ static long process_descriptor(struct keyboard *kbd, uint8_t code,
 		dbg("op unicode %s (layer %s)", pressed ? "down" : "up", layer->name);
 
 		if (pressed) {
+			/* don't allow reentrant modifier, we have a fixed amount of space */
+			if (kbd->unicode_state == UNICODE_DISABLED) {
+				kbd->unicode_state = UNICODE_HEX;
+				kbd->unicode_len = 0;
+			}
+
+			// uint8_t keys[6] = {79, 79, 79, 79};
+			// uint32_t codepoint = parse_unicode_hex(keys, 4);
+			// dbg("insert unicode %x", codepoint);
+			// insert_unicode(kbd, dl, codepoint);
+
 			// Mark the chord as active.
 			// Dynamically add a new chord to the current layer.
-			struct chord *chord = &layer->chords[layer->nr_chords];
-			// The max unicode code point is 0x10FFFF
-			for (i = 0; i < 6; i++) {
-				chord->keys[i].kind = KEY_UNICODE_HEX;
-				chord->keys[i].literal = 0;
-			}
-			chord->sz = 6;
-			struct descriptor d;
-			d.op = OP_KEYSEQUENCE;
-			d.args[0].code = KEYD_NOOP;
-			chord->d = d; // TODO: check what this does when hitting 6 keys
+			// struct chord *chord = &layer->chords[layer->nr_chords];
+			// // The max unicode code point is 0x10FFFF
+			// for (i = 0; i < 6; i++) {
+			// 	chord->keys[i].kind = KEY_UNICODE_HEX;
+			// 	chord->keys[i].literal = 0;
+			// }
+			// chord->sz = 6;
+			// struct descriptor d;
+			// d.op = OP_KEYSEQUENCE;
+			// d.args[0].code = KEYD_NOOP;
+			// chord->d = d; // TODO: check what this does when hitting 6 keys
 
-			layer->nr_chords++;
+			// layer->nr_chords++;
 	 	} else {
 	 		// Resolve the sequence. (TODO: i think this just happens automatically because of normal chord handling? oh wait no we have to read the keys right)
 
 	 		// Remove the chord.
-			layer->nr_chords--;
+			// layer->nr_chords--;
 
 			// Find which of the active chords is the right one.
-			uint8_t keys[6];
-			size_t key;
-			for (int i = 0; i < ARRAY_SIZE(kbd->active_chords); i++) {
-				struct active_chord *ac = &kbd->active_chords[i];
-				dbg("considering active chord %d: active=%d; op=%d", i, ac->active, ac->chord.d.op);
-				if (ac->active && ac->chord.d.op == OP_KEYSEQUENCE && ac->chord.d.args[0].code == KEYD_NOOP)   {
-					for (key = 0; key < ac->chord.sz; key++) {
-						switch (ac->chord.keys[key].kind) {
-							case KEY_MATCHED:
-								keys[key] = ac->chord.keys[key].literal;
-								continue;
-							case KEY_UNICODE_HEX:  // no more keys typed
-								goto found;
-							default:
-								goto not_this_chord;
-						}
-					}
-				}
-				not_this_chord: {}
- 			}
+			// uint8_t keys[6];
+			// size_t key;
+			// for (int i = 0; i < ARRAY_SIZE(kbd->active_chords); i++) {
+			// 	struct active_chord *ac = &kbd->active_chords[i];
+			// 	dbg("considering active chord %d: active=%d; op=%d", i, ac->active, ac->chord.d.op);
+			// 	if (ac->active && ac->chord.d.op == OP_KEYSEQUENCE && ac->chord.d.args[0].code == KEYD_NOOP)   {
+			// 		for (key = 0; key < ac->chord.sz; key++) {
+			// 			switch (ac->chord.keys[key].kind) {
+			// 				case KEY_MATCHED:
+			// 					keys[key] = ac->chord.keys[key].literal;
+			// 					continue;
+			// 				case KEY_UNICODE_HEX:  // no more keys typed
+			// 					goto found;
+			// 				default:
+			// 					goto not_this_chord;
+			// 			}
+			// 		}
+			// 	}
+			// 	not_this_chord: {}
+ 		// 	}
 
-			break; // no key found; noop
+			// break; // no key found; noop
 			
-			found: {}
+			// found: {}
+
 			// Input the unicode character.
-			uint32_t codepoint = parse_unicode_hex(keys, key);
+			kbd->unicode_state = UNICODE_DISABLED;
+			uint32_t codepoint = parse_unicode_hex(kbd->pending_unicode, kbd->unicode_len);
+			dbg("ended seq with %d pending (parsed to U+%x)", kbd->unicode_len, codepoint);
 			insert_unicode(kbd, dl, codepoint);
 	 	}
 		// need to set layer->chords to our custom unicode chord
@@ -1022,7 +1039,6 @@ static int handle_chord(struct keyboard *kbd,
 		kbd->chord.queue_sz = 0;
 		kbd->chord.match = NULL;
 		kbd->chord.start_code = code;
-		dbg("clear queue; replace with %d", code);
 
 		enqueue_chord_event(kbd, code, pressed, time);
 		switch (check_chord_match(kbd, &kbd->chord.match, &kbd->chord.match_layer)) {
