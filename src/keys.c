@@ -412,42 +412,6 @@ int parse_key_sequence(const char *s, uint8_t *codep, uint8_t *modsp)
 	return -1;
 }
 
-
-int key_match(enum unicode_state state, uint8_t code) {
-	switch(state) {
-		case UNICODE_DISABLED:
-			return 0;
-		case UNICODE_HEX: switch(code) {
-			case KEYD_A:
-			case KEYD_B:
-			case KEYD_C:
-			case KEYD_D:
-			case KEYD_E:
-			case KEYD_F:
-				return 1;
-		}
-    __attribute__ ((fallthrough));
-		case UNICODE_DECIMAL: switch(code) {
-			case KEYD_KP0:
-			case KEYD_KP1:
-			case KEYD_KP2:
-			case KEYD_KP3:
-			case KEYD_KP4:
-			case KEYD_KP5:
-			case KEYD_KP6:
-			case KEYD_KP7:
-			case KEYD_KP8:
-			case KEYD_KP9:
-				return 1;
-			default:
-				return 0;
-		}
-		default:
-			fprintf(stderr, "unreachable: unknown unicode state %d\n", state);
-			exit(-1);
-	}
-}
-
 uint8_t parse_digit(uint8_t digit) {
 	switch (digit) {
 			case KEYD_KP0:
@@ -470,21 +434,39 @@ uint8_t parse_digit(uint8_t digit) {
 				return 8;
 			case KEYD_KP9:
 				return 9;
-			case KEYD_A:
+			/* gunzip -c /etc/console-setup/cached_UTF-8_del.kmap.gz
+					| rg 'keycode.*?Hex_[A-F]' -o | sort -k6 */
+			case KEYD_NUMLOCK:
 				return 10;
-			case KEYD_B:
+			case KEYD_KPSLASH:
 				return 11;
-			case KEYD_C:
+			case KEYD_KPASTERISK:
 				return 12;
-			case KEYD_D:
+			case KEYD_KPMINUS:
 				return 13;
-			case KEYD_E:
+			case KEYD_KPPLUS:
 				return 14;
-			case KEYD_F:
+			case KEYD_KPENTER:
 				return 15;
 			default:
 				return -1;
 		}
+}
+
+int key_match(enum unicode_state state, uint8_t code) {
+	uint8_t digit;
+	switch(state) {
+		case UNICODE_DISABLED:
+			return 0;
+		case UNICODE_HEX:
+			return parse_digit(code) != (uint8_t)-1;
+		case UNICODE_DECIMAL:
+			digit = parse_digit(code);
+			return digit != (uint8_t)-1 && digit < 10;
+		default:
+			fprintf(stderr, "unreachable: unknown unicode state %d\n", state);
+			exit(-1);
+	}
 }
 
 uint32_t parse_unicode(uint8_t *keys, size_t n, uint8_t radix) {
